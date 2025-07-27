@@ -4,35 +4,19 @@ import json
 import time
 import os
 from datetime import datetime
-from flask import Flask
-from threading import Thread
+from flask import Flask, request
 
-# === FLASK SERVER TO KEEP RENDER ALIVE ===
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "🟢 StyleHub Bot is live!"
-
-@app.route('/post')
-def manual_post():
-    post_deal()
-    return "✅ Deal posted!"
-
-def run_web():
-    app.run(host='0.0.0.0', port=8080)
-
-Thread(target=run_web).start()
-
-# === CONFIGURATION (SECURE via ENV VARIABLES) ===
+# === CONFIGURATION FROM ENV VARIABLES ===
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHANNEL_ID = os.environ.get('CHANNEL_ID')
 ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL')  # e.g., https://your-app.onrender.com
 
 bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
+used_links = set()
 is_paused = False
 last_post_time = None
-used_links = set()
 
 # === LOAD DEALS FROM deals.json ===
 def load_deals():
@@ -72,11 +56,28 @@ def post_deal():
     except Exception as e:
         print("❌ Telegram send error:", e)
 
+# === FLASK ROUTES ===
+@app.route('/')
+def home():
+    return "🟢 StyleHub Webhook Bot is live!"
+
+@app.route('/post')
+def manual_post():
+    post_deal()
+    return "✅ Manual deal posted!"
+
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+def receive_update():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
+
 # === TELEGRAM COMMANDS ===
 @bot.message_handler(commands=['start'])
 def start(message):
     if message.from_user.id == ADMIN_ID:
-        bot.reply_to(message, "👋 Bot is live. Use /nextdeal, /pause, /resume, /status")
+        bot.reply_to(message, "👋 Bot is live with webhook. Use /nextdeal, /pause, /resume, /status")
 
 @bot.message_handler(commands=['nextdeal'])
 def nextdeal(message):
@@ -101,25 +102,25 @@ def resume(message):
 @bot.message_handler(commands=['status'])
 def status(message):
     if message.from_user.id == ADMIN_ID:
-        msg = f"📊 Last Post: {last_post_time or 'None yet'}\n🕒 Next in 1 hour\n⏯️ Paused: {is_paused}"
+        msg = f"📊 Last Post: {last_post_time or 'None yet'}\n🕒 Auto-post paused: {is_paused}"
         bot.reply_to(message, msg)
 
-# === AUTO POSTING THREAD ===
-def auto_post():
+# === AUTO POST EVERY HOUR ===
+def auto_post_loop():
     while True:
-        try:
-            if not is_paused:
-                print("🕒 Auto-posting a new deal...")
-                post_deal()
-                time.sleep(3600)
-            else:
-                print("⏸️ Bot is paused. Waiting...")
-                time.sleep(60)
-        except Exception as e:
-            print("❌ Auto-post error:", e)
+        if not is_paused:
+            print("🕒 Auto-posting a new deal...")
+            post_deal()
+            time.sleep(3600)
+        else:
+            print("⏸️ Bot is paused.")
             time.sleep(60)
 
-Thread(target=auto_post).start()
-
-print("🚀 StyleHub EarnKaro Bot + Flask Server Started...")
-bot.infinity_polling()
+# === RUN FLASK SERVER & SET WEBHOOK ===
+if __name__ == '__main__':
+    import threading
+    threading.Thread(target=auto_post_loop).start()
+    bot.remove_webhook()
+    time.sleep(1)
+    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+    app.run(host='0.0.0.0', port=8080)
