@@ -5,12 +5,13 @@ import time
 import os
 from datetime import datetime
 from flask import Flask, request
+from threading import Thread
 
 # === CONFIGURATION FROM ENV VARIABLES ===
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 CHANNEL_ID = os.environ.get('CHANNEL_ID')
 ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL')  # e.g., https://your-app.onrender.com
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL')  # e.g., https://stylehub-bot.onrender.com
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -18,7 +19,7 @@ used_links = set()
 is_paused = False
 last_post_time = None
 
-# === LOAD DEALS FROM deals.json ===
+# === LOAD DEALS FROM JSON ===
 def load_deals():
     try:
         with open("deals.json", "r", encoding='utf-8') as f:
@@ -38,7 +39,7 @@ def get_random_deal():
             return deal
     return None
 
-# === POST A DEAL TO THE CHANNEL ===
+# === POST A DEAL TO CHANNEL ===
 def post_deal():
     global last_post_time
     deal = get_random_deal()
@@ -67,7 +68,7 @@ def manual_post():
     return "✅ Manual deal posted!"
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
-def receive_update():
+def webhook():
     json_str = request.get_data().decode('utf-8')
     update = telebot.types.Update.de_json(json_str)
     bot.process_new_updates([update])
@@ -105,7 +106,7 @@ def status(message):
         msg = f"📊 Last Post: {last_post_time or 'None yet'}\n🕒 Auto-post paused: {is_paused}"
         bot.reply_to(message, msg)
 
-# === AUTO POST EVERY HOUR ===
+# === AUTO POST THREAD ===
 def auto_post_loop():
     while True:
         if not is_paused:
@@ -116,10 +117,9 @@ def auto_post_loop():
             print("⏸️ Bot is paused.")
             time.sleep(60)
 
-# === RUN FLASK SERVER & SET WEBHOOK ===
+# === START EVERYTHING ===
 if __name__ == '__main__':
-    import threading
-    threading.Thread(target=auto_post_loop).start()
+    Thread(target=auto_post_loop).start()
     bot.remove_webhook()
     time.sleep(1)
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
