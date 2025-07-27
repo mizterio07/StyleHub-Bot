@@ -8,10 +8,10 @@ from flask import Flask, request
 from threading import Thread
 
 # === CONFIGURATION FROM ENV VARIABLES ===
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-CHANNEL_ID = os.environ.get('CHANNEL_ID')
-ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
-WEBHOOK_URL = os.environ.get('WEBHOOK_URL')  # e.g., https://stylehub-bot.onrender.com
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+CHANNEL_ID = os.getenv('CHANNEL_ID')  # e.g. "@yourchannel" or "-100..."
+ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # e.g. "https://your-render-url.onrender.com"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -28,7 +28,7 @@ def load_deals():
         print("❌ Error loading deals:", e)
         return []
 
-# === PICK NON-REPEATED DEAL ===
+# === GET A RANDOM DEAL ===
 def get_random_deal():
     deals = load_deals()
     random.shuffle(deals)
@@ -39,7 +39,7 @@ def get_random_deal():
             return deal
     return None
 
-# === POST A DEAL TO CHANNEL ===
+# === POST A DEAL ===
 def post_deal():
     global last_post_time
     deal = get_random_deal()
@@ -60,14 +60,14 @@ def post_deal():
 # === FLASK ROUTES ===
 @app.route('/')
 def home():
-    return "🟢 StyleHub Webhook Bot is live!"
+    return "🟢 Bot is alive."
 
 @app.route('/post')
 def manual_post():
     post_deal()
     return "✅ Manual deal posted!"
 
-@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
     json_str = request.get_data().decode('utf-8')
     update = telebot.types.Update.de_json(json_str)
@@ -106,7 +106,7 @@ def status(message):
         msg = f"📊 Last Post: {last_post_time or 'None yet'}\n🕒 Auto-post paused: {is_paused}"
         bot.reply_to(message, msg)
 
-# === AUTO POST THREAD ===
+# === AUTO POST EVERY HOUR ===
 def auto_post_loop():
     while True:
         if not is_paused:
@@ -120,6 +120,7 @@ def auto_post_loop():
 # === START EVERYTHING ===
 if __name__ == '__main__':
     Thread(target=auto_post_loop).start()
+    time.sleep(1)
     bot.remove_webhook()
     time.sleep(1)
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
