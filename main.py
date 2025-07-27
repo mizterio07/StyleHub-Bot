@@ -2,11 +2,12 @@ import telebot
 import random
 import json
 import time
+import os
 from datetime import datetime
 from flask import Flask
 from threading import Thread
 
-# === FLASK SERVER TO KEEP REPLIT ALIVE ===
+# === FLASK SERVER TO KEEP RENDER ALIVE ===
 app = Flask('')
 
 @app.route('/')
@@ -23,10 +24,10 @@ def run_web():
 
 Thread(target=run_web).start()
 
-# === CONFIGURATION ===
-BOT_TOKEN = '8329392193:AAFEm9uw7L_oJStoqkJ69AzpJI5lwlE4aG8'
-CHANNEL_ID = '@StyleHubIND'
-ADMIN_ID = 1427409581
+# === CONFIGURATION (SECURE via ENV VARIABLES) ===
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+CHANNEL_ID = os.environ.get('CHANNEL_ID')
+ADMIN_ID = int(os.environ.get('ADMIN_ID', '0'))
 
 bot = telebot.TeleBot(BOT_TOKEN)
 is_paused = False
