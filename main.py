@@ -2,16 +2,15 @@ import telebot
 import random
 import json
 import time
-import os
 from datetime import datetime
 from flask import Flask, request
 from threading import Thread
 
-# === CONFIGURATION FROM ENV VARIABLES ===
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-CHANNEL_ID = os.getenv('CHANNEL_ID')  # e.g. "@yourchannel" or "-100..."
-ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # e.g. "https://your-render-url.onrender.com"
+# === HARDCODED CONFIGURATION ===
+BOT_TOKEN = '8329392193:AAGkO2qEmeDi2Um10SfF1o8OlIfj1I-JDug'
+CHANNEL_ID = '@StyleHubIND'  # Change this to your real channel ID or username
+ADMIN_ID = 1427409581  # Replace with your actual Telegram user ID
+WEBHOOK_URL = 'https://stylehub-bot.onrender.com'
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -21,7 +20,7 @@ last_post_time = None
 
 # === LOAD DEALS FROM JSON ===
 def load_deals():
-    try:
+   try:
         with open("deals.json", "r", encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
