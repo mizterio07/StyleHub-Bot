@@ -2,32 +2,36 @@ import telebot
 import random
 import json
 import time
+import os
 from datetime import datetime
 from flask import Flask, request
 from threading import Thread
 
-# === HARDCODED CONFIGURATION ===
-BOT_TOKEN = '8329392193:AAGkO2qEmeDi2Um10SfF1o8OlIfj1I-JDug'
-CHANNEL_ID = '@StyleHubIND'  # Change this to your real channel ID or username
-ADMIN_ID = 1427409581  # Replace with your actual Telegram user ID
-WEBHOOK_URL = 'https://stylehub-bot.onrender.com'
+# === ENVIRONMENT VARIABLES ===
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+CHANNEL_ID = os.getenv('CHANNEL_ID')  # Example: "@StyleHubIND"
+ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Example: "https://stylehub-bot.onrender.com"
 
+# === INITIALIZE BOT AND FLASK ===
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
+
+# === GLOBAL STATES ===
 used_links = set()
 is_paused = False
 last_post_time = None
 
-# === LOAD DEALS FROM JSON ===
+# === LOAD DEALS ===
 def load_deals():
-   try:
+    try:
         with open("deals.json", "r", encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print("❌ Error loading deals:", e)
         return []
 
-# === GET A RANDOM DEAL ===
+# === GET RANDOM NON-REPEATED DEAL ===
 def get_random_deal():
     deals = load_deals()
     random.shuffle(deals)
@@ -38,11 +42,10 @@ def get_random_deal():
             return deal
     return None
 
-# === POST A DEAL ===
+# === POST TO TELEGRAM CHANNEL ===
 def post_deal():
     global last_post_time
     deal = get_random_deal()
-
     if not deal:
         print("⚠️ No new deals left to post!")
         return
@@ -56,22 +59,16 @@ def post_deal():
     except Exception as e:
         print("❌ Telegram send error:", e)
 
-# === FLASK ROUTES ===
-@app.route('/')
-def home():
-    return "🟢 Bot is alive."
-
-@app.route('/post')
-def manual_post():
-    post_deal()
-    return "✅ Manual deal posted!"
-
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    json_str = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return '', 200
+# === AUTO POSTING ===
+def auto_post_loop():
+    while True:
+        if not is_paused:
+            print("🕒 Auto-posting a new deal...")
+            post_deal()
+            time.sleep(3600)
+        else:
+            print("⏸️ Auto-posting paused.")
+            time.sleep(60)
 
 # === TELEGRAM COMMANDS ===
 @bot.message_handler(commands=['start'])
@@ -105,16 +102,22 @@ def status(message):
         msg = f"📊 Last Post: {last_post_time or 'None yet'}\n🕒 Auto-post paused: {is_paused}"
         bot.reply_to(message, msg)
 
-# === AUTO POST EVERY HOUR ===
-def auto_post_loop():
-    while True:
-        if not is_paused:
-            print("🕒 Auto-posting a new deal...")
-            post_deal()
-            time.sleep(3600)
-        else:
-            print("⏸️ Bot is paused.")
-            time.sleep(60)
+# === FLASK ROUTES ===
+@app.route('/')
+def home():
+    return "🟢 Bot is live."
+
+@app.route('/post')
+def manual_post():
+    post_deal()
+    return "✅ Manual deal posted!"
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
 
 # === START EVERYTHING ===
 if __name__ == '__main__':
